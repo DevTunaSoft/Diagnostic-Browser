@@ -26,6 +26,26 @@ folder (screenshots, copies of `*.health.json`, the exported ZIPs, Event Viewer
 exports). Do not continue past a FAIL that blocks later tests until it is fixed
 and the affected tests are re-run.
 
+**Running an UNSIGNED build (expected during testing).** If the build is not yet
+code-signed, Windows and some AV engines will warn — this is normal and does not
+mean the app is broken:
+
+- **SmartScreen:** launching the exe or installer shows a blue "Windows protected
+  your PC" box. Click **More info**, then **Run anyway**. (An administrator can
+  pre-approve the file, but click-through is fine for testing.)
+- **Browser download warning:** if the exe is downloaded via a browser it may be
+  flagged as "not commonly downloaded" — choose **Keep**.
+- **Antivirus / EDR:** a large self-contained exe (~500 MB with bundled Chromium
+  + model) can be held for scanning or quarantined. If so, add a temporary
+  exclusion for the test copy, or have IT allowlist it.
+- **Verify you have the right file first:** before trusting a downloaded copy,
+  confirm its SHA-256 matches the hash recorded for the build
+  (`Get-FileHash DiagnosticBrowser.exe -Algorithm SHA256`).
+
+For an unsigned test build, record **T01** and **T47** as *Deferred — unsigned
+build* rather than FAIL; they become applicable once signing is done per the
+code-signing runbook.
+
 **Clean-machine rule.** T01–T08 and T43–T45 must be performed on a machine with
 **no** Python, Node, Chrome, Playwright, SQLCipher, or build tools installed, and
 with **no developer internet dependency access** — this is the whole point of a
