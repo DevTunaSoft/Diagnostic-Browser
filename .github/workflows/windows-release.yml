@@ -1,0 +1,59 @@
+name: Windows release
+# Builds the self-contained EXE on a tagged commit and attaches it to a
+# permanent GitHub Release (CI artifacts expire after 7 days; Releases do not).
+# Trigger by pushing a tag like v5.0.0-rc4.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and release (e.g. v5.0.0-rc4)'
+        required: true
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build and run packaged Windows acceptance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\finish_on_windows.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Windows acceptance failed' }
+          if (-not (Test-Path 'dist/DiagnosticBrowser.exe')) { throw 'Single-file EXE missing' }
+      - name: Compute SHA-256
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash 'dist/DiagnosticBrowser.exe' -Algorithm SHA256).Hash
+          "$h  DiagnosticBrowser.exe" | Out-File -Encoding ascii 'dist/DiagnosticBrowser.exe.sha256'
+          "EXE_SHA256=$h" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+      - name: Publish Release with the EXE attached
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Diagnostic Browser ${{ github.event.inputs.tag || github.ref_name }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/DiagnosticBrowser.exe
+            dist/DiagnosticBrowser.exe.sha256
+          body: |
+            Self-contained Windows x64 build of Diagnostic Browser (bundled Chromium + offline AI model).
+
+            **This is a release candidate, not a production-approved release.** It is **unsigned**:
+            Windows SmartScreen will prompt on first run (More info -> Run anyway). Production approval
+            still requires code signing, the T01-T50 acceptance, a 24h soak, the real vendor/Okta
+            workflow, and AV/EDR validation. See docs/WINDOWS_ACCEPTANCE_T01_T50.md and
+            docs/CODE_SIGNING_AND_INSTALLER_RUNBOOK.md.
+
+            SHA-256 (DiagnosticBrowser.exe): `${{ env.EXE_SHA256 }}`
+
+            Verify with: `Get-FileHash DiagnosticBrowser.exe -Algorithm SHA256`
+          prerelease: true
