@@ -32,11 +32,14 @@ try {
     }
     if (-not $OK) { throw 'Chromium, encrypted recorder, and watchdog integration failed' }
     $Database=Join-Path $Work 'flight_recorder.sqlite'
-    $Magic=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($Database),0,16)
-    if ($Magic -eq "SQLite format 3`0") { throw 'Plaintext SQLite found in production application' }
+    # Stop the engine first: while it is running it holds the encrypted database
+    # open, and Windows denies another process reading the file (sharing
+    # violation). The encryption header persists after a clean shutdown.
     New-Item -ItemType File -Path (Join-Path $Work 'engine.stop') -Force | Out-Null
     if (-not $P.WaitForExit(45000)) { throw 'Graceful process shutdown failed' }
     if ($P.ExitCode -ne 0) { throw ('Shutdown exited with code '+$P.ExitCode) }
+    $Magic=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($Database),0,16)
+    if ($Magic -eq "SQLite format 3`0") { throw 'Plaintext SQLite found in production application' }
     Write-Host 'PASS: standalone EXE + bundled Chromium + encrypted evidence + subprocesses'
 } finally {
     if ($P -and -not $P.HasExited) {
