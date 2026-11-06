@@ -1,0 +1,45 @@
+name: Windows executable acceptance
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'diagnostic_browser/**'
+      - 'launcher.py'
+      - 'pyproject.toml'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/windows-build.yml'
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Require complete application source
+        shell: pwsh
+        run: |
+          foreach ($path in @('launcher.py','pyproject.toml','diagnostic_browser/main.py','scripts/finish_on_windows.ps1','tests')) {
+            if (-not (Test-Path $path)) { throw "Release blocked: missing $path" }
+          }
+      - name: Execute source and packaged Windows acceptance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\finish_on_windows.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Windows acceptance failed' }
+      - name: Require standalone executable
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist/DiagnosticBrowser.exe')) { throw 'Single-file EXE missing' }
+      - name: Publish candidate artifact (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-browser-windows-candidate
+          path: dist/DiagnosticBrowser.exe
+          if-no-files-found: error
+          retention-days: 7
