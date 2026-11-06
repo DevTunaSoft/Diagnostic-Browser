@@ -149,6 +149,11 @@ def main():
     p.add_argument('--detached',action='store_true',help='Launch engine independently of this command')
     p.add_argument('--synthetic-lab',action='store_true',help='Explicitly permit loopback synthetic test capture')
     args=p.parse_args()
+    # Be robust to callers (e.g. Windows Start-Process) that pass the path with
+    # surrounding quotes or stray whitespace; otherwise a leading space makes an
+    # absolute path look relative and it is joined onto the current directory.
+    if isinstance(args.data_dir, str):
+        args.data_dir = args.data_dir.strip().strip('"').strip("'").strip()
     if getattr(sys, 'frozen', False):
         from .bundle import verify_bundled_runtime
         verify_bundled_runtime()

@@ -11,7 +11,9 @@ New-Item -ItemType Directory -Path $Work -Force | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Mandatory bundled assets missing' }
 $P=$null
 try {
-    $Args=@('--data-dir','"'+$Work+'"','--url','about:blank','--headless','--synthetic-lab','--port','18739')
+    # Do not wrap $Work in literal quotes: Start-Process -ArgumentList mangles
+    # an already-quoted element, corrupting the --data-dir value on Windows.
+    $Args=@('--data-dir',$Work,'--url','about:blank','--headless','--synthetic-lab','--port','18739')
     $P=Start-Process -FilePath $Exe -ArgumentList $Args -PassThru -NoNewWindow
     $Deadline=(Get-Date).AddSeconds(360)
     $OK=$false
