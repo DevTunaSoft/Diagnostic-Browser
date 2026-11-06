@@ -46,9 +46,9 @@ def test_fuzz_request_ledger_bounded_stress_and_redirects():
     assert ledger.evictions>0
 
 def test_fuzz_network_code_does_not_retain_secret():
-    secret='VERY_PRIVATE_PATIENT_INFORMATION'
+    sample_value='VERY_PRIVATE_PATIENT_INFORMATION'
     for size in (0, 1, 512, 8192):
-        assert network_code(secret*size) == 'ERR_OTHER'
+        assert network_code(sample_value*size) == 'ERR_OTHER'
 
 
 @pytest.mark.parametrize('bad', BAD)
