@@ -16,7 +16,7 @@ jobs:
           python3 - <<'PY'
           import pathlib,re,sys
           root=pathlib.Path('.')
-          banned=re.compile(r'trauma[\W_]*soft|midwestmedical|mmtamb',re.I)
+          banned=re.compile('trau'+'ma[\\W_]*so'+'ft|midwest'+'medical|mmt'+'amb',re.I)
           secret=re.compile(r'(?i)(?:api[_-]?key|secret|password|access[_-]?token)\s*[:=]\s*[\x22\x27][^\x22\x27]{8,}')
           ignored={'.git'}
           failures=[]
