@@ -66,6 +66,50 @@ def infer(events: list, *, model_factory=None) -> str:
     return answer[:2048].strip()
 
 
+def selftest() -> dict:
+    """Run real inference on a canned, sanitized synthetic bundle and verify the
+    offline-AI contract end to end: sanitization strips disallowed fields before
+    the prompt, the bundled model actually produces a hypothesis, and that output
+    never echoes a sensitive canary. Uses the real bundled model (no stub)."""
+    canary = 'CANARY_SECRET_DO_NOT_EMIT_7f3a1c'
+    events = [
+        {'kind': 'http_error', 'severity': 'error', 'fields': {'status': 503, 'route': 'api', 'method': 'GET'}},
+        {'kind': 'network_failure', 'severity': 'error', 'fields': {'error_code': 'ERR_CONNECTION_RESET'}},
+        {'kind': 'js_exception', 'severity': 'error', 'fields': {'error_class': 'TypeError', 'line': 42}},
+        # This event carries a forbidden field and MUST be dropped before the prompt.
+        {'kind': 'http_error', 'severity': 'error', 'fields': {'status': 500, 'authorization': 'Bearer ' + canary}},
+    ]
+    prompt = build_prompt(events)
+    sanitized_ok = canary not in prompt
+    if not sanitized_ok:
+        raise RuntimeError('sanitization failed: canary reached the prompt')
+    answer = infer(events)  # real bundled model
+    analysis = (answer or '').strip()
+    if not analysis:
+        raise RuntimeError('offline inference produced no output')
+    leak_free = canary not in analysis
+    if not leak_free:
+        raise RuntimeError('inference output leaked sensitive canary')
+    path = model_path()
+    return {
+        'status': 'LOCAL_UNVERIFIED',
+        'verified': True,
+        'model_bytes': path.stat().st_size,
+        'analysis_chars': len(analysis),
+        'sanitized_ok': sanitized_ok,
+        'leak_free': leak_free,
+    }
+
+
+def selftest_main() -> int:
+    try:
+        print(json.dumps(selftest(), sort_keys=True), flush=True)
+        return 0
+    except (RuntimeError, ValueError, TypeError, OSError, ImportError) as exc:
+        print(json.dumps({'verified': False, 'status': 'UNAVAILABLE', 'error': type(exc).__name__}), flush=True)
+        return 2
+
+
 def main() -> int:
     # Python-level network denial is a defense-in-depth guard, NOT an OS-level
     # isolation claim. No user prompt is accepted, only validated local data.

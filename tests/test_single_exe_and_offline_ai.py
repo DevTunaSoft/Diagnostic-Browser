@@ -82,6 +82,35 @@ def test_ai_local_model_mock_no_gpu_no_raw_data(monkeypatch,tmp_path):
     assert 'not a verified cause' in offline_ai.infer(events,model_factory=Model)
 
 
+_CANARY='CANARY_SECRET_DO_NOT_EMIT_7f3a1c'
+
+def test_ai_selftest_contract_passes(monkeypatch,tmp_path):
+    m=tmp_path/'test.gguf';m.write_bytes(b'GGUF'+b'B'*1048576)
+    monkeypatch.setattr(offline_ai,'model_path',lambda:m)
+    monkeypatch.setattr(offline_ai,'infer',lambda events:'Observations: 503 on api. Hypotheses: possible upstream dependency; not a verified cause. Verification: retry and inspect gateway.')
+    r=offline_ai.selftest()
+    assert r['verified'] is True and r['status']=='LOCAL_UNVERIFIED'
+    assert r['analysis_chars']>0 and r['sanitized_ok'] is True and r['leak_free'] is True
+
+def test_ai_selftest_detects_output_leak(monkeypatch,tmp_path):
+    m=tmp_path/'test.gguf';m.write_bytes(b'GGUF'+b'B'*1048576)
+    monkeypatch.setattr(offline_ai,'model_path',lambda:m)
+    monkeypatch.setattr(offline_ai,'infer',lambda events:'leaked '+_CANARY)
+    with pytest.raises(RuntimeError,match='canary'):
+        offline_ai.selftest()
+
+def test_ai_selftest_requires_nonempty_output(monkeypatch,tmp_path):
+    m=tmp_path/'test.gguf';m.write_bytes(b'GGUF'+b'B'*1048576)
+    monkeypatch.setattr(offline_ai,'model_path',lambda:m)
+    monkeypatch.setattr(offline_ai,'infer',lambda events:'   ')
+    with pytest.raises(RuntimeError,match='no output'):
+        offline_ai.selftest()
+
+def test_ai_selftest_main_fails_closed_without_model(monkeypatch,tmp_path):
+    monkeypatch.setattr(offline_ai,'model_path',lambda:tmp_path/'missing.gguf')
+    assert offline_ai.selftest_main()==2
+
+
 def test_onefile_detached_children_get_independent_lifetime(monkeypatch):
     from diagnostic_browser import supervisor
     observed=[]
