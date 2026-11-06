@@ -74,6 +74,22 @@ function renderChrome(x,effective,watchdog){
  if(br.state==='DEGRADED'||br.state==='FAILED')issues.push('Browser '+br.state.toLowerCase());
  if(!issues.length){const ok=document.createElement('div');ok.className='ok';ok.append(el('span','✓'),el('span','No active issues'));al.append(ok);}
  else for(const m of issues){al.append(el('p',m,'al'));}
+ // browser viewport + address bar
+ if($('vp-browser')){$('vp-browser').textContent=br.state||'—';$('vp-targets').textContent=String(br.monitored_pages||0);
+  $('vp-coverage').textContent=br.collector_coverage||'NOT VERIFIED';$('vp-recorder').textContent=rec.state||'—';}
+ if($('address-url')){const url=br.active_url||br.url||lastStatus.target||'';
+  $('address-url').textContent=url||'Secured diagnostic session · no page exposed';
+  $('tab-title').textContent=url?url.replace(/^https?:\/\//,'').split('/')[0]:'Diagnostic session';}
+}
+const LOG_MAP={network:['http_activity','http_error','network_failure'],console:['console','console_message'],cpdom:['cpdom'],websocket:['websocket'],socketio:['socketio','socket_io'],iframe:['iframe'],worker:['worker']};
+let logFilter='all';
+function renderLog(events){const body=$('log-body');if(!body)return;body.replaceChildren();
+ let rows=events.slice().reverse();
+ if(logFilter==='errors')rows=rows.filter(e=>['error','critical'].includes(e.severity));
+ else if(logFilter!=='all'){const kinds=LOG_MAP[logFilter]||[];rows=rows.filter(e=>kinds.includes(e.kind))}
+ if(!rows.length){const tr=document.createElement('tr');const td=el('td','No approved events for this channel yet.','empty');td.colSpan=4;tr.append(td);body.append(tr);return}
+ for(const e of rows.slice(0,120)){const tr=document.createElement('tr');
+  tr.append(el('td',e.timestamp),el('td',e.kind),el('td',e.severity,'tag '+e.severity),el('td',JSON.stringify(e.fields)));body.append(tr)}
 }
 function renderEvents(events){lastEvents=events;stat('stat-failures',events.filter(e=>['error','critical'].includes(e.severity)).length);
  const recent=$('recent-events');recent.replaceChildren();for(const e of events.slice(-6).reverse()){
@@ -84,6 +100,7 @@ function renderEvents(events){lastEvents=events;stat('stat-failures',events.filt
   const full=[e.id,e.kind,e.severity,JSON.stringify(e.fields)].join(' ').toLowerCase();if(!full.includes(q))continue;n++;
   const tr=document.createElement('tr');tr.append(el('td',e.timestamp),el('td',e.kind),el('td',e.severity,'tag '+e.severity),el('td',JSON.stringify(e.fields)),el('td',e.id));body.append(tr);
  }$('timeline-count').textContent=n+' retained events shown. Display limited to most recent 200.';
+ renderLog(events);
 }
 function renderIncidents(items){const body=$('incidents-body');body.replaceChildren();for(const i of items){const tr=document.createElement('tr');for(const v of [i.id,i.at,i.trigger,i.window_start+' — '+i.window_end])tr.append(el('td',v));body.append(tr)}}
 async function regression(){try{
@@ -124,6 +141,7 @@ async function init(){try{csrf=(await get('/api/session')).csrf}catch{location.r
  document.querySelectorAll('button.export').forEach(x=>x.addEventListener('click',()=>exportFile(x.dataset.preset)));
  $('event-filter').addEventListener('input',()=>renderEvents(lastEvents));
  $('chromium-update-btn').addEventListener('click',chromiumUpdate);
+ document.querySelectorAll('.logtab').forEach(t=>t.addEventListener('click',()=>{logFilter=t.dataset.log;document.querySelectorAll('.logtab').forEach(x=>x.classList.toggle('active',x===t));renderLog(lastEvents)}));
  // bottom action bar mirrors existing tools
  $('act-incident').addEventListener('click',mark);
  $('act-selftest').addEventListener('click',()=>{showView('health');selfTest()});

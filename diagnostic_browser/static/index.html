@@ -4,16 +4,19 @@
   <div class="identity"><div class="brand-mark">◈</div><div><strong>Diagnostic Browser</strong><span>Diagnostic &amp; Resilience Browser</span></div></div>
   <p class="nav-label">MONITOR</p>
   <nav aria-label="Primary navigation">
-    <button class="nav active" data-view="cockpit"><span class="ic">▦</span> Session Cockpit</button>
-    <button class="nav" data-view="timeline"><span class="ic">≡</span> Live Timeline</button>
-    <button class="nav" data-view="incidents"><span class="ic">⚑</span> Incidents</button>
-    <button class="nav" data-view="coverage"><span class="ic">◎</span> Recording Coverage</button>
-    <button class="nav" data-view="regression"><span class="ic">⇆</span> Regression Analysis</button>
+    <button class="nav active" data-view="browser"><span class="ic">🌐</span> Browser</button>
+    <button class="nav" data-view="cockpit"><span class="ic">▦</span> Dashboard</button>
+    <button class="nav" data-view="coverage"><span class="ic">◎</span> Diagnostics</button>
+    <button class="nav" data-view="timeline"><span class="ic">⦿</span> Flight Recorder</button>
+    <button class="nav" data-view="incidents"><span class="ic">⚑</span> Evidence</button>
+    <button class="nav" data-view="regression"><span class="ic">⇆</span> Regression</button>
     <p class="nav-label">TOOLS</p>
     <button class="nav" data-view="health"><span class="ic">✚</span> Self-Diagnostics</button>
-    <button class="nav" data-view="ai"><span class="ic">✧</span> Offline AI Analysis</button>
-    <button class="nav" data-view="updates"><span class="ic">⟳</span> Browser Engine</button>
-    <button class="nav" data-view="export"><span class="ic">⇩</span> Export Center</button>
+    <button class="nav" data-view="repair"><span class="ic">⚙</span> Auto-Repair</button>
+    <button class="nav" data-view="ai"><span class="ic">✧</span> AI Analysis</button>
+    <button class="nav" data-view="updates"><span class="ic">⟳</span> Settings</button>
+    <button class="nav" data-view="export"><span class="ic">⇩</span> Reports</button>
+    <button class="nav" data-view="about"><span class="ic">ⓘ</span> About</button>
   </nav>
   <div class="health-card" id="health-card">
     <div class="health-head"><span class="dot" id="health-dot"></span><strong id="health-title">Checking systems…</strong></div>
@@ -24,7 +27,7 @@
 
 <main class="main">
   <header class="topbar">
-    <div class="topbar-id"><div class="eyebrow">CONTINUOUS MONITORING / V5 RELEASE CANDIDATE</div><h1 id="viewTitle">Session Cockpit</h1></div>
+    <div class="topbar-id"><div class="eyebrow">CONTINUOUS MONITORING / V5 RELEASE CANDIDATE</div><h1 id="viewTitle">Browser</h1></div>
     <div class="chips">
       <div class="chip" id="chip-rec"><span class="chip-ic">⦿</span><div><b>Flight Recorder</b><small id="chip-rec-sub">—</small></div></div>
       <div class="chip" id="chip-diag"><span class="chip-ic">▧</span><div><b>Diagnostics</b><small id="chip-diag-sub">—</small></div></div>
@@ -33,19 +36,55 @@
     </div>
     <div class="header-actions"><span class="status-pill" id="recording-pill">CHECKING</span><button id="mark" class="primary">⚑ Mark Incident</button></div>
   </header>
-  <p class="notice">Evidence is restricted to approved target system origins. Authentication sites and other browsing content are excluded. This release candidate requires validated Windows and target system acceptance before use.</p>
 
   <div class="content-grid">
    <div class="views">
-<section id="cockpit" class="view active"><div class="stat-grid"><div class="stat"><div class="stat-label">Approved events</div><strong id="stat-events">—</strong><small>Stored securely</small></div><div class="stat"><div class="stat-label">Preserved incidents</div><strong id="stat-incidents">—</strong><small>Manual and automatic</small></div><div class="stat"><div class="stat-label">Recent observed failures</div><strong id="stat-failures">—</strong><small>Within last 200 displayed events</small></div><div class="stat"><div class="stat-label">Active browser targets</div><strong id="stat-targets">—</strong><small>Coverage is source-dependent</small></div></div><div class="twocol"><article class="panel"><div class="panel-heading"><h2>Recorder and browser</h2><span class="mini-label">LIVE SYSTEM STATE</span></div><div id="system-summary" class="kv"></div></article><article class="panel"><div class="panel-heading"><h2>Recent technical events</h2><button class="link-button" data-goto="timeline">View all</button></div><div id="recent-events" class="event-stack"><p class="muted">Loading evidence…</p></div></article></div><article class="panel"><h2>Safety and evidence controls</h2><div class="features"><div><b>◉ Local-only</b><p>Evidence stays on this workstation until export.</p></div><div><b>◇ Allowlisted capture</b><p>No request bodies, screenshots, tokens or page text.</p></div><div><b>⚙ Independent watchdog</b><p>Checks collector heartbeat outside the browser process.</p></div></div></article></section>
+
+<section id="browser" class="view active browser-view">
+  <div class="browserbar">
+    <div class="tabstrip"><div class="btab active"><span class="favicon">◉</span><span id="tab-title">Diagnostic session</span></div><button class="newtab" title="Managed by the secured diagnostic window">+</button></div>
+    <div class="addressbar"><button class="navbtn" title="Back">‹</button><button class="navbtn" title="Forward">›</button><button class="navbtn" id="reloadbtn" title="Reload">⟳</button><div class="urlbox"><span class="lock" id="url-lock">🔒</span><span id="address-url">about:blank</span></div><span class="addr-note">read-only mirror</span></div>
+  </div>
+  <div class="viewport" id="viewport">
+    <div class="vp-card">
+      <div class="vp-mark">◈</div>
+      <h2 id="vp-title">Secured diagnostic session</h2>
+      <p class="muted" id="vp-sub">The monitored page renders in the isolated diagnostic browser window. This mirror shows live session state and sanitized evidence only — no page contents, tokens or form data are ever displayed or stored.</p>
+      <div class="vp-grid">
+        <div class="vp-stat"><span>Browser state</span><strong id="vp-browser">—</strong></div>
+        <div class="vp-stat"><span>Monitored targets</span><strong id="vp-targets">—</strong></div>
+        <div class="vp-stat"><span>Capture coverage</span><strong id="vp-coverage">—</strong></div>
+        <div class="vp-stat"><span>Recorder</span><strong id="vp-recorder">—</strong></div>
+      </div>
+    </div>
+  </div>
+  <div class="logdock">
+    <div class="logtabs" id="logtabs">
+      <button class="logtab active" data-log="all">Events (Live)</button>
+      <button class="logtab" data-log="network">Network</button>
+      <button class="logtab" data-log="console">Console</button>
+      <button class="logtab" data-log="errors">Errors</button>
+      <button class="logtab" data-log="cpdom">CPDOM</button>
+      <button class="logtab" data-log="websocket">WebSocket</button>
+      <button class="logtab" data-log="socketio">Socket.IO</button>
+      <button class="logtab" data-log="iframe">Iframes</button>
+      <button class="logtab" data-log="worker">Workers</button>
+    </div>
+    <div class="logbody"><table><thead><tr><th>Time (UTC)</th><th>Type</th><th>Severity</th><th>Approved metadata</th></tr></thead><tbody id="log-body"></tbody></table></div>
+  </div>
+</section>
+
+<section id="cockpit" class="view"><div class="stat-grid"><div class="stat"><div class="stat-label">Approved events</div><strong id="stat-events">—</strong><small>Stored securely</small></div><div class="stat"><div class="stat-label">Preserved incidents</div><strong id="stat-incidents">—</strong><small>Manual and automatic</small></div><div class="stat"><div class="stat-label">Recent observed failures</div><strong id="stat-failures">—</strong><small>Within last 200 displayed events</small></div><div class="stat"><div class="stat-label">Active browser targets</div><strong id="stat-targets">—</strong><small>Coverage is source-dependent</small></div></div><div class="twocol"><article class="panel"><div class="panel-heading"><h2>Recorder and browser</h2><span class="mini-label">LIVE SYSTEM STATE</span></div><div id="system-summary" class="kv"></div></article><article class="panel"><div class="panel-heading"><h2>Recent technical events</h2><button class="link-button" data-goto="timeline">View all</button></div><div id="recent-events" class="event-stack"><p class="muted">Loading evidence…</p></div></article></div><article class="panel"><h2>Safety and evidence controls</h2><div class="features"><div><b>◉ Local-only</b><p>Evidence stays on this workstation until export.</p></div><div><b>◇ Allowlisted capture</b><p>No request bodies, screenshots, tokens or page text.</p></div><div><b>⚙ Independent watchdog</b><p>Checks collector heartbeat outside the browser process.</p></div></div></article></section>
 <section id="timeline" class="view"><div class="panel"><div class="panel-heading"><h2>Chronological approved events</h2><input id="event-filter" type="search" placeholder="Filter category, ID or status" aria-label="Filter events"></div><div class="table-wrap"><table><thead><tr><th>UTC Time</th><th>Type</th><th>Severity</th><th>Approved metadata</th><th>Evidence ID</th></tr></thead><tbody id="events-body"></tbody></table></div><p id="timeline-count" class="muted"></p></div></section>
 <section id="incidents" class="view"><div class="panel"><div class="panel-heading"><h2>Protected incidents</h2><button class="secondary" id="mark2">+ Preserve current window</button></div><p class="muted">Each marker protects the available 30-minute history plus a 10-minute post-incident window. Gaps are reported, not reconstructed.</p><div class="table-wrap"><table><thead><tr><th>Incident ID</th><th>Triggered (UTC)</th><th>Type</th><th>Protected window</th></tr></thead><tbody id="incidents-body"></tbody></table></div></div></section>
 <section id="coverage" class="view"><div class="panel"><h2>Recording coverage ledger</h2><p class="muted">ACTIVE means an event listener is attached. It does not guarantee all events are observable. Worker/iframe coverage requires additional validation.</p><div class="table-wrap"><table><thead><tr><th>Source</th><th>Observed state</th><th>Last updated (UTC)</th></tr></thead><tbody id="coverage-body"></tbody></table></div></div></section>
 <section id="regression" class="view"><div class="panel"><div class="panel-heading"><h2>Deterministic regression comparison</h2><button id="capture-baseline" class="secondary">Save trusted baseline</button></div><p class="muted">Compares sanitized error signatures with a manually saved baseline. A new signature is not proof that a release caused it. No AI is involved in classification.</p><div id="baseline-status" class="result">No comparison loaded.</div><div class="table-wrap"><table><thead><tr><th>Fingerprint</th><th>Previously</th><th>Current</th><th>Classification</th></tr></thead><tbody id="regression-body"></tbody></table></div></div><div class="panel"><h2>Known issues registry</h2><p class="muted">Link reviewed fingerprints to vendor ticket references. Free-form patient or incident notes are not accepted.</p><div class="table-wrap"><table><thead><tr><th>Fingerprint</th><th>Status</th><th>Ticket</th></tr></thead><tbody id="issues-body"></tbody></table></div><form id="issue-form" class="issue-form"><input id="issue-signature" placeholder="64-character fingerprint" required><input id="issue-ticket" placeholder="Vendor ticket reference" maxlength="40" required><select id="issue-state"><option>OPEN</option><option>ACKNOWLEDGED</option><option>RESOLVED</option><option>IGNORED</option></select><button class="secondary" type="submit">Save issue</button></form></div></section>
 <section id="health" class="view"><div class="twocol"><div class="panel"><h2>Run system self-test</h2><p class="muted">Generates a local synthetic event, confirms committed database readback, checks SQLCipher/database integrity and reports browser status. It never injects faults into target system.</p><button id="selftest" class="primary">Run full available checks</button></div><div class="panel"><h2>Diagnostic results</h2><pre class="json-panel" id="selftest-result">Not run this session.</pre></div></div><div class="panel"><h2>Safety limitations</h2><p class="muted">Windows crash-log integration, complete worker auto-attachment, robust automatic repair, Windows acceptance and OS-isolated offline AI are not yet verified. SQLCipher is mandatory for normal operation and must pass on-device testing.</p></div></section>
+<section id="repair" class="view"><div class="panel"><h2>Bounded automatic recovery</h2><p class="muted">Self-repair reattaches to failed diagnostic targets without restarting an authenticated browser session. Recoveries are bounded, logged as evidence, and never bypass enterprise policy or weaken the sandbox. It does not restart or modify the target system.</p><div id="repair-summary" class="kv"></div></div><div class="panel"><h2>Repair scope</h2><p class="muted">Covered: CDP target reattachment, collector reconnection, watchdog-triggered restart of the dashboard surface. Not covered without Windows acceptance: renderer-crash survival of the host process and OS-level watchdog restart.</p></div></section>
 <section id="ai" class="view"><div class="panel"><h2>Fully local evidence interpretation</h2><p class="muted">Uses only sanitized, locally retained technical metadata. The model cannot access Chrome, the CDP connection, or raw browser messages. AI findings are hypotheses, not verified root causes.</p><button id="run-ai" class="primary">Analyze approved evidence locally</button><pre id="ai-result" class="json-panel">Not run.</pre></div></section>
 <section id="updates" class="view"><div class="panel"><div class="panel-heading"><h2>Bundled Chromium engine</h2><span class="mini-label" id="chromium-badge">CHECKING</span></div><p class="muted">The browser engine ships with the application. Updates are installed into a per-user, writable location that overrides the read-only bundled copy — the signed application is never modified. Downloads use Playwright's pinned, hash-verified Chromium from its official distribution only; the sandbox and capture policy are never weakened, and no downgrade below the security floor is permitted.</p><div id="chromium-status" class="kv"></div><div class="update-actions"><button id="chromium-update-btn" class="primary" disabled>Check again</button><label class="force-label"><input type="checkbox" id="chromium-force"> Allow during an active incident</label></div><div id="chromium-result" class="result">Engine status not yet loaded.</div></div><div class="panel"><h2>Why in-app updates</h2><p class="muted">A browser is a security-sensitive component. In-app updating lets you move to a newer hardened Chromium build between full installers, with the same pinned, verified source the installer uses. The running session keeps its current engine; the new build is used on the next browser launch.</p></div></section>
 <section id="export" class="view"><div class="twocol"><div class="panel"><h2>Engineering Support Bundle</h2><p class="muted">PDF summary, standalone interactive HTML, full approved JSONL/CSV timeline, incident and coverage records, SHA-256 integrity manifest.</p><button class="primary export" data-preset="engineering">Generate engineering ZIP</button></div><div class="panel"><h2>Internal Debug Bundle</h2><p class="muted">Expanded retained approved events for local IT investigation. Never includes raw browser payloads or credential stores.</p><button class="secondary export" data-preset="internal">Generate internal ZIP</button></div></div><div class="panel"><h2>System Health Bundle</h2><p class="muted">Only health, recording coverage, self-test and collection-interruption evidence.</p><button class="secondary export" data-preset="system-health">Generate system-health ZIP</button><div id="export-result" class="result"></div></div></section>
+<section id="about" class="view"><div class="panel"><h2>About Diagnostic Browser</h2><p class="muted">Diagnostic Browser · V5.0 Release Candidate. A privacy-first Chromium diagnostic flight recorder for IT and engineering. Evidence stays local and encrypted; no remote transmission. Windows-native acceptance and production validation are pending.</p><div id="about-kv" class="kv"></div></div></section>
    </div>
    <aside class="rail">
      <article class="panel rail-panel"><div class="panel-heading"><h2><span class="live-dot"></span>Live Diagnostics</h2></div><ul class="diag-list" id="diag-list"><li class="muted">Loading…</li></ul></article>
