@@ -19,7 +19,9 @@ def verify():
             canary = 'SYNTHETIC_PRIVATE_MARKER_DO_NOT_PERSIST_IN_PLAINTEXT'
             item = store.add('health','info',{'target':'collector','code':'READY'})
             assert store.integrity()
-            assert store.db.execute('PRAGMA cipher_status').fetchone()[0] == 1
+            cipher_row = store.db.execute('PRAGMA cipher_status').fetchone()
+            # SQLCipher returns pragma values as text ('1'), not int; coerce before comparing.
+            assert cipher_row and int(cipher_row[0]) == 1
             # A committed row exists before close. Don't open with ordinary SQLite.
             store.db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
         finally:
