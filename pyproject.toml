@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diagnostic-browser"
+version = "5.0.0rc4"
+description = "Privacy-first Chromium diagnostic flight recorder (IT-only development preview)"
+requires-python = ">=3.11"
+dependencies = ["playwright>=1.50,<2", "sqlcipher3>=0.6.2,<1", "cryptography>=43,<48", "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "reportlab>=4,<5"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2", "httpx>=0.27,<1"]
+
+[project.scripts]
+diagnostic-browser = "diagnostic_browser.main:main"
+
+[tool.setuptools.package-data]
+diagnostic_browser = ["static/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["diagnostic_browser*"]
+exclude = ["tests*", "validation*", "reference*", "samples*"]
