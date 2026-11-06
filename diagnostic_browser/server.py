@@ -17,8 +17,17 @@ from .recorder import Recorder
 from .reports import export_bundle
 
 class Dashboard:
-    def __init__(self, store:EvidenceStore,recorder:Recorder, root:Path, browser=None):
+    def __init__(self, store:EvidenceStore,recorder:Recorder, root:Path, browser=None, chromium_updater=None):
         self.store=store;self.recorder=recorder;self.root=root;self.browser=browser
+        if chromium_updater is None:
+            from .chromium_update import ChromiumUpdater, default_resolver, default_installer
+            from .bundle import is_frozen
+            chromium_updater=ChromiumUpdater(
+                resolve_available=default_resolver, installer=default_installer,
+                frozen=is_frozen(),
+                incident_active=lambda: bool(self.store.incidents()),
+                on_evidence=lambda kind,sev,fields: self.recorder.accept(kind,sev,fields))
+        self.chromium_updater=chromium_updater
         self.login_code=secrets.token_urlsafe(18)
         self.sessions:dict[str,str]={}
         self.session_touched:dict[str,float]={}
@@ -241,6 +250,32 @@ class Dashboard:
             observed_at = datetime.now(timezone.utc)
             await self.recorder.flush()
             return self.store.mark(observed_at=observed_at)
+        @app.get('/api/chromium/status')
+        async def chromium_status(request:Request):
+            require(request)
+            try:
+                return self.chromium_updater.check().as_dict()
+            except Exception:
+                # The updater must never take the dashboard down.
+                return {'status':'UNKNOWN','update_available':False,'current_revision':None,
+                        'available_revision':None,'writable':False,'note':'Update status unavailable.'}
+        @app.post('/api/chromium/update')
+        async def chromium_update(request:Request):
+            require(request,True)
+            from .chromium_update import ChromiumUpdateError
+            raw=await request.body()
+            data={}
+            if raw:
+                try:data=await request.json()
+                except Exception:raise HTTPException(400,'invalid JSON')
+            force=bool(isinstance(data,dict) and data.get('force') is True)
+            try:
+                result=await asyncio.to_thread(self.chromium_updater.apply,force=force)
+                return {'ok':True, **result.as_dict()}
+            except ChromiumUpdateError as exc:
+                raise HTTPException(409,str(exc))
+            except Exception:
+                raise HTTPException(503,'Chromium update could not be completed.')
         @app.post('/api/self-test')
         async def self_test(request:Request):
             require(request,True)

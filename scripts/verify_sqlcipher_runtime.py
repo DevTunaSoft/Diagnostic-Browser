@@ -19,22 +19,30 @@ def verify():
             canary = 'SYNTHETIC_PRIVATE_MARKER_DO_NOT_PERSIST_IN_PLAINTEXT'
             item = store.add('health','info',{'target':'collector','code':'READY'})
             assert store.integrity()
-            assert store.db.execute('PRAGMA cipher_status').fetchone()[0] == 1
+            cipher_row = store.db.execute('PRAGMA cipher_status').fetchone()
+            # SQLCipher returns pragma values as text ('1'), not int; coerce before comparing.
+            assert cipher_row and int(cipher_row[0]) == 1
             # A committed row exists before close. Don't open with ordinary SQLite.
             store.db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
         finally:
             store.close()
         file = directory/'flight_recorder.sqlite'
         assert file.is_file()
-        header = file.open('rb').read(16)
+        with file.open('rb') as handle:
+            header = handle.read(16)
         assert header != b'SQLite format 3\x00', 'unencrypted database found'
-        with sqlite3.connect(file) as plain:
-            try:
-                plain.execute('SELECT name FROM sqlite_master').fetchall()
-            except sqlite3.DatabaseError:
-                pass
-            else:
-                raise AssertionError('ordinary SQLite opened encrypted evidence without a key')
+        # NOTE: `with sqlite3.connect(...)` does NOT close the connection (it only
+        # scopes the transaction); leaving it open holds a handle on the file and
+        # makes TemporaryDirectory cleanup fail with PermissionError on Windows.
+        plain = sqlite3.connect(file)
+        try:
+            plain.execute('SELECT name FROM sqlite_master').fetchall()
+        except sqlite3.DatabaseError:
+            pass
+        else:
+            raise AssertionError('ordinary SQLite opened encrypted evidence without a key')
+        finally:
+            plain.close()
         reopened = EvidenceStore(directory,read_only=True)
         try:
             assert reopened.encryption_backend == 'SQLCIPHER'
