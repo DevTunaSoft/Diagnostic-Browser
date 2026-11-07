@@ -619,7 +619,12 @@ def retarget_selftest_main() -> int:
         print(json.dumps(result, sort_keys=True), flush=True)
         return 0 if result.get('verified') else 2
     except (RuntimeError, ValueError, OSError, ImportError) as exc:
-        print(json.dumps({'verified': False, 'error': type(exc).__name__}), flush=True)
+        import traceback
+        tb = traceback.format_exc()
+        # Keep only frames from our own package to aid CI diagnosis; no secrets.
+        frames = [ln for ln in tb.splitlines() if 'diagnostic_browser' in ln or 'Error' in ln]
+        print(json.dumps({'verified': False, 'error': type(exc).__name__,
+                          'detail': str(exc)[:200], 'where': frames[-4:]}), flush=True)
         return 2
 
 
