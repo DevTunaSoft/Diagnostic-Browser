@@ -1,47 +1,43 @@
-name: V5 Integrated GUI Windows Preview
+name: V5 Integrated GUI Windows Acceptance
 on:
   push:
     branches: [feature/v5-integrated-gui-build]
     paths:
-      - 'diagnostic_browser/desktop_preview.py'
+      - 'diagnostic_browser/**'
+      - 'scripts/**'
+      - 'tests/**'
       - '.github/workflows/v5-gui-preview.yml'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  windows-gui-preview:
+  windows-acceptance:
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install desktop build dependencies
-        run: python -m pip install --upgrade pip PySide6 pyinstaller
-      - name: Compile and smoke-import GUI module
+      - name: Compile and verify source
         shell: pwsh
         run: |
-          python -m py_compile diagnostic_browser/desktop_preview.py
-          python -c "import diagnostic_browser.desktop_preview as gui; assert callable(gui.main); print('GUI import PASS')"
-      - name: Build Windows desktop preview EXE
+          $ErrorActionPreference='Stop'
+          python -m compileall -q diagnostic_browser
+          if ($LASTEXITCODE -ne 0) { throw 'Source compilation failed' }
+      - name: Run full existing Windows engineering acceptance
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name DiagnosticBrowserV5Preview --collect-all PySide6 --hidden-import PySide6.QtWebEngineWidgets diagnostic_browser/desktop_preview.py
-          if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
-      - name: Validate EXE artifact
+          $ErrorActionPreference='Stop'
+          & .\scripts\finish_on_windows.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Full Windows engineering acceptance failed' }
+      - name: Explicitly block disconnected GUI release
         shell: pwsh
         run: |
-          $exe='dist/DiagnosticBrowserV5Preview.exe'
-          if (-not (Test-Path $exe)) { throw "Executable missing" }
-          $file=Get-Item $exe
-          if ($file.Length -lt 1000000) { throw "Executable suspiciously small" }
-          Get-FileHash $exe -Algorithm SHA256 | Format-List
-          Write-Host "Build artifact exists; interactive Windows GUI runtime and browser-to-recorder integration NOT verified."
-      - name: Upload unsigned preview
-        uses: actions/upload-artifact@v4
-        with:
-          name: DiagnosticBrowserV5-GUI-Windows-Preview
-          path: dist/DiagnosticBrowserV5Preview.exe
-          if-no-files-found: error
-          retention-days: 7
+          $source=Get-Content diagnostic_browser/desktop_preview.py -Raw
+          if ($source -match 'not connected|not instrumented') {
+            throw 'RELEASE BLOCKED: embedded browser diagnostics are not integrated. A preview EXE is not an install-ready product.'
+          }
+          throw 'RELEASE BLOCKED: no independent embedded-browser recorder integration and installer acceptance evidence is configured.'
+      # No artifact upload. Release must remain blocked until the integrated
+      # browser/recorder, real Windows runtime, installer and regression gates pass.
