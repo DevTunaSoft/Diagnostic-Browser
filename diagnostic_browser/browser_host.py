@@ -550,8 +550,13 @@ class BrowserHostManager:
         host = validate_target_url(url, self.args.synthetic_lab)
         clean = url if url.endswith('/') or urlsplit(url).path else url
         await self.stop(deliberate=True)
-        (self.root / 'browser-host.stop').unlink(missing_ok=True)
-        (self.root / 'browser-host.health.json').unlink(missing_ok=True)
+        # Wait for the previous host process to fully exit rather than deleting
+        # files it may still hold open (Windows raises PermissionError on an
+        # in-use file). Once its PID is gone, _safe_host_status reads None and
+        # start() spawns a fresh child; the new child clears its own stop file.
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and _safe_host_status(self.root) is not None:
+            await asyncio.sleep(0.25)
         self.process = None
         self._save_target(clean, host)
         # stop() closed the bridge server; rebuild it for the new host.
