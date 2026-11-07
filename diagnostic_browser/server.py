@@ -134,8 +134,8 @@ class Dashboard:
         @app.get('/',response_class=HTMLResponse)
         async def home(request:Request):
             if not request.cookies.get('diagnostic_session') in self.sessions:
-                return HTMLResponse((Path(__file__).parent/'static'/'login.html').read_text())
-            return HTMLResponse((Path(__file__).parent/'static'/'index.html').read_text())
+                return HTMLResponse((Path(__file__).parent/'static'/'login.html').read_text(encoding='utf-8'))
+            return HTMLResponse((Path(__file__).parent/'static'/'index.html').read_text(encoding='utf-8'))
         @app.post('/api/login')
         async def login(request:Request):
             now=time.monotonic()
