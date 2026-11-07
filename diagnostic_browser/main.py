@@ -137,6 +137,9 @@ def main():
     if len(sys.argv)>1 and sys.argv[1]=='--ai-selftest':
         from .offline_ai import selftest_main
         return selftest_main()
+    if len(sys.argv)>1 and sys.argv[1]=='--browser-retarget-selftest':
+        from .browser_host import retarget_selftest_main
+        return retarget_selftest_main()
     if len(sys.argv)>1 and sys.argv[1]=='--repair-child':
         sys.argv.pop(1)
         from .repair import main as repair_main

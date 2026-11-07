@@ -41,6 +41,13 @@ try {
     $Magic=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($Database),0,16)
     if ($Magic -eq "SQLite format 3`0") { throw 'Plaintext SQLite found in production application' }
     Write-Host 'PASS: standalone EXE + bundled Chromium + encrypted evidence + subprocesses'
+    # Validate the live operator-retarget path: the EXE must stop and relaunch
+    # its bundled browser scoped to a chosen site and reconnect.
+    $RT=(& $Exe --browser-retarget-selftest) | Select-Object -Last 1
+    if ($LASTEXITCODE -ne 0) { throw ('Retarget self-test failed: '+$RT) }
+    $RTj=$RT | ConvertFrom-Json
+    if (-not $RTj.verified -or $RTj.host -ne 'example.com') { throw ('Retarget self-test contract failed: '+$RT) }
+    Write-Host ('PASS: operator retarget relaunched the bundled browser scoped to '+$RTj.host)
 } finally {
     if ($P -and -not $P.HasExited) {
         New-Item -ItemType File -Path (Join-Path $Work 'engine.stop') -Force | Out-Null

@@ -128,6 +128,28 @@ def validate_launch_url(url: str, synthetic_lab: bool) -> str:
     raise ValueError('unsafe initial navigation')
 
 
+def validate_target_url(url: str, synthetic_lab: bool) -> str:
+    """Validate an operator-chosen capture target and return its host.
+
+    Enforces the same rules as capture authorization: HTTPS only (or loopback
+    http under an explicit synthetic lab), a valid host, and no sign-in/OAuth
+    domains. Raises ValueError with an operator-readable message otherwise.
+    """
+    validate_launch_url(url, synthetic_lab)  # origin-only, no creds/paths/query
+    if url == 'about:blank':
+        raise ValueError('Enter a site to diagnose, e.g. https://example.com')
+    host = (urlsplit(url).hostname or '').lower().rstrip('.')
+    if not host:
+        raise ValueError('Enter a valid https site, e.g. https://example.com')
+    probe = url if url.endswith('/') else url + '/'
+    if synthetic_lab and host == '127.0.0.1':
+        return host
+    if not Scope(allowed_hosts=(host,)).allowed(probe):
+        raise ValueError('This site cannot be captured: use an https site, and sign-in domains '
+                         '(login/sso/okta/accounts/...) are excluded by policy.')
+    return host
+
+
 class HostRecorderProxy:
     """Accepts only sanitized events; never gives Chrome direct database access."""
     def __init__(self):
@@ -273,6 +295,11 @@ class BrowserHostServer:
         self.rejected = 0
 
     def start(self):
+        # Idempotent: the bridge outlives browser-host restarts (retarget), so a
+        # second start must not re-bind the named pipe / socket (Windows raises
+        # WinError 5 when the address is already owned).
+        if self.listener is not None:
+            return
         if self.family == 'AF_UNIX':
             # Restricted data directory keeps socket unavailable to other users.
             Path(self.address).unlink(missing_ok=True)
@@ -423,30 +450,65 @@ class BrowserHostManager:
         self.process = None
         self.status = 'INITIALIZING'
         self.server.loop = asyncio.get_running_loop()
+        self._target = self._load_target()
+
+    # -- capture target persistence -----------------------------------------
+    def _target_path(self) -> Path:
+        return self.root / 'capture-target.json'
+
+    def _load_target(self):
+        try:
+            obj = json.loads(self._target_path().read_text('utf-8'))
+            if isinstance(obj, dict) and isinstance(obj.get('url'), str) and isinstance(obj.get('host'), str):
+                return {'url': obj['url'], 'host': obj['host']}
+        except (OSError, ValueError, TypeError):
+            pass
+        return None
+
+    def _save_target(self, url: str, host: str) -> None:
+        _atomic_json(self._target_path(), {'url': url, 'host': host})
+        self._target = {'url': url, 'host': host}
+
+    def current_target(self):
+        return dict(self._target) if self._target else None
+
+    def _child_cmd_env(self, initial_url: str):
+        """Build the (cmd, env) for the browser-host child. The authorized
+        capture host is passed only through the environment the child reads via
+        Scope.configured(); it is never placed on the command line."""
+        cmd = ([sys.executable, '--browser-host-child'] if getattr(sys, 'frozen', False)
+               else [sys.executable, '-m', 'diagnostic_browser.browser_host'])
+        cmd += ['--data-dir', str(self.root), '--url', initial_url]
+        if self.args.chrome_path:
+            cmd += ['--chrome-path', self.args.chrome_path]
+        if self.args.headless:
+            cmd.append('--headless')
+        if self.args.synthetic_lab:
+            cmd.append('--synthetic-lab')
+        env = {**os.environ}
+        host = (self._target or {}).get('host') or os.environ.get('DIAGNOSTIC_BROWSER_ALLOWED_HOSTS', '')
+        if host:
+            env['DIAGNOSTIC_BROWSER_ALLOWED_HOSTS'] = host
+        if getattr(sys, 'frozen', False):
+            # The host intentionally survives its collector. PyInstaller
+            # onefile must independently unpack for a long-lived child.
+            env['PYINSTALLER_RESET_ENVIRONMENT'] = '1'
+        return cmd, env
 
     async def start(self, initial_url: str):
+        # Resume the last chosen target across engine restarts.
+        if initial_url == 'about:blank' and self._target:
+            initial_url = self._target['url']
         initial_url = validate_launch_url(initial_url, self.args.synthetic_lab)
         self.server.start()
         prior = _safe_host_status(self.root)
         if prior is None:
-            cmd = ([sys.executable, '--browser-host-child'] if getattr(sys,'frozen',False)
-                   else [sys.executable, '-m', 'diagnostic_browser.browser_host'])
-            cmd += ['--data-dir', str(self.root), '--url', initial_url]
-            if self.args.chrome_path:
-                cmd += ['--chrome-path', self.args.chrome_path]
-            if self.args.headless:
-                cmd.append('--headless')
-            if self.args.synthetic_lab:
-                cmd.append('--synthetic-lab')
+            cmd, env = self._child_cmd_env(initial_url)
             # Never inherit controller stdout/stderr pipes. A resident browser
             # host must not keep QA subprocess pipes open after the collector
             # exits; Chrome diagnostics must not print sensitive browser data.
             kw = {'stdin': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL,
-                  'stderr': subprocess.DEVNULL, 'close_fds': True}
-            if getattr(sys, 'frozen', False):
-                # The host intentionally survives its collector. PyInstaller
-                # onefile must independently unpack for a long-lived child.
-                kw['env'] = {**os.environ, 'PYINSTALLER_RESET_ENVIRONMENT': '1'}
+                  'stderr': subprocess.DEVNULL, 'close_fds': True, 'env': env}
             if os.name == 'nt':
                 kw['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
             else:
@@ -481,6 +543,41 @@ class BrowserHostManager:
                 'pending':int(state.get('pending',0)), 'dropped':int(state.get('dropped',0)),
                 'privacy_rejected':int(state.get('privacy_rejected',0))}
 
+    async def retarget(self, url: str):
+        """Point the diagnostic browser at a new site and scope capture to it.
+
+        Because the browser IPC is one-way (the dashboard cannot command the
+        running browser) and the capture scope is fixed at browser launch, this
+        safely stops the current browser host and relaunches it navigated to the
+        chosen origin with that host authorized. Credentials/sign-in domains and
+        non-HTTPS targets are refused, matching capture policy.
+        """
+        host = validate_target_url(url, self.args.synthetic_lab)
+        clean = url if url.endswith('/') or urlsplit(url).path else url
+        # Stop only the browser-host child; the bridge server (named pipe /
+        # socket) stays up so the relaunched child reconnects to it. Do not
+        # delete host files the exiting child may still hold open (Windows
+        # PermissionError). Once the old PID is gone, _safe_host_status reads
+        # None and start() spawns a fresh child that clears its own stop file.
+        await self._stop_child()
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and _safe_host_status(self.root) is not None:
+            await asyncio.sleep(0.25)
+        self.process = None
+        self._save_target(clean, host)
+        await self.start(clean)
+        return self.current_target()
+
+    async def _stop_child(self):
+        """Signal the browser-host child to exit and wait for it, leaving the
+        bridge server running for the next child."""
+        (self.root / 'browser-host.stop').touch(mode=0o600)
+        if self.process:
+            try:
+                await asyncio.to_thread(self.process.wait, 15)
+            except subprocess.TimeoutExpired:
+                pass
+
     async def stop(self, *, deliberate: bool = False):
         if deliberate:
             (self.root / 'browser-host.stop').touch(mode=0o600)
@@ -491,6 +588,57 @@ class BrowserHostManager:
                     # Do not kill an authenticated browser when it may be live.
                     pass
         self.server.close()
+
+
+async def retarget_selftest(url: str = 'https://example.com') -> dict:
+    """Exercise the live operator-retarget path with the real (bundled) browser:
+    start on about:blank, then switch the diagnostic target to `url`, which stops
+    and relaunches the browser host scoped and navigated to that host, and verify
+    it reconnects. Used by the packaged-EXE Windows acceptance."""
+    import tempfile
+    from .recorder import Recorder
+    from .store import EvidenceStore
+    root = Path(tempfile.mkdtemp(prefix='db-retarget-'))
+    store = EvidenceStore(root)
+    rec = Recorder(store)
+    await rec.start()
+    args = argparse.Namespace(synthetic_lab=False, chrome_path=None, headless=True,
+                              data_dir=str(root), url='about:blank')
+    mgr = BrowserHostManager(root, rec, store, args)
+    try:
+        await mgr.start('about:blank')
+        target = await mgr.retarget(url)
+        deadline = time.monotonic() + 120
+        health = mgr.health()
+        while time.monotonic() < deadline:
+            health = mgr.health()
+            if health.get('browser_connected'):
+                break
+            await asyncio.sleep(1)
+        return {'verified': bool(health.get('browser_connected')),
+                'host': target['host'], 'state': health.get('state'),
+                'monitored_pages': health.get('monitored_pages', 0)}
+    finally:
+        try: await mgr.stop(deliberate=True)
+        except Exception: pass
+        try: await rec.stop()
+        except Exception: pass
+        store.close()
+
+
+def retarget_selftest_main() -> int:
+    try:
+        result = asyncio.run(retarget_selftest())
+        print(json.dumps(result, sort_keys=True), flush=True)
+        return 0 if result.get('verified') else 2
+    except (RuntimeError, ValueError, OSError, ImportError) as exc:
+        import traceback
+        tb = traceback.format_exc()
+        # Keep only frames from our own package to aid CI diagnosis; no secrets.
+        frames = [ln for ln in tb.splitlines() if 'diagnostic_browser' in ln or 'Error' in ln]
+        print(json.dumps({'verified': False, 'error': type(exc).__name__,
+                          'detail': str(exc)[:200], 'where': frames[-4:]}), flush=True)
+        return 2
 
 
 async def run_host(args):
