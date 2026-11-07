@@ -250,6 +250,28 @@ class Dashboard:
             observed_at = datetime.now(timezone.utc)
             await self.recorder.flush()
             return self.store.mark(observed_at=observed_at)
+        @app.get('/api/target')
+        async def get_target(request:Request):
+            require(request)
+            return {'target': self.browser.current_target() if self.browser else None}
+        @app.post('/api/target')
+        async def set_target(request:Request):
+            require(request,True)
+            if self.browser is None:
+                raise HTTPException(503,'browser host unavailable')
+            try:data=await request.json()
+            except Exception:raise HTTPException(400,'invalid JSON')
+            url=data.get('url') if isinstance(data,dict) else None
+            if not isinstance(url,str) or not url.strip():
+                raise HTTPException(422,'a site URL is required')
+            try:
+                target=await self.browser.retarget(url.strip())
+            except ValueError as exc:
+                raise HTTPException(422,str(exc))
+            except Exception:
+                raise HTTPException(503,'could not switch the diagnostic target')
+            self.recorder.accept('health','info',{'target':'browser','code':'TARGET_SET'})
+            return {'ok':True,'target':target}
         @app.get('/api/chromium/status')
         async def chromium_status(request:Request):
             require(request)

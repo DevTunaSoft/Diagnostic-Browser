@@ -43,13 +43,14 @@
 <section id="browser" class="view active browser-view">
   <div class="browserbar">
     <div class="tabstrip"><div class="btab active"><span class="favicon">◉</span><span id="tab-title">Diagnostic session</span></div><button class="newtab" title="Managed by the secured diagnostic window">+</button></div>
-    <div class="addressbar"><button class="navbtn" title="Back">‹</button><button class="navbtn" title="Forward">›</button><button class="navbtn" id="reloadbtn" title="Reload">⟳</button><div class="urlbox"><span class="lock" id="url-lock">🔒</span><span id="address-url">about:blank</span></div><span class="addr-note">read-only mirror</span></div>
+    <form class="addressbar" id="target-form"><span class="lock" id="url-lock">🔒</span><input id="target-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com — enter a site to diagnose"><button class="go-btn" type="submit" id="target-go">Diagnose</button></form>
   </div>
   <div class="viewport" id="viewport">
     <div class="vp-card">
       <div class="vp-mark">◈</div>
-      <h2 id="vp-title">Secured diagnostic session</h2>
-      <p class="muted" id="vp-sub">The monitored page renders in the isolated diagnostic browser window. This mirror shows live session state and sanitized evidence only — no page contents, tokens or form data are ever displayed or stored.</p>
+      <h2 id="vp-title">Choose a site to diagnose</h2>
+      <p class="muted" id="vp-sub">Enter an https site above and press Diagnose. The isolated diagnostic browser opens there and the flight recorder captures sanitized evidence for that host only — no page contents, tokens or form data are ever displayed or stored. Sign-in domains are excluded by policy.</p>
+      <div id="target-result" class="result" style="display:none"></div>
       <div class="vp-grid">
         <div class="vp-stat"><span>Browser state</span><strong id="vp-browser">—</strong></div>
         <div class="vp-stat"><span>Monitored targets</span><strong id="vp-targets">—</strong></div>

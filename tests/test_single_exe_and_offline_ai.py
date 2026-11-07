@@ -119,4 +119,4 @@ def test_onefile_detached_children_get_independent_lifetime(monkeypatch):
     supervisor.spawn_engine(['DiagnosticBrowser.exe','--engine'])
     assert observed[0]['env']['PYINSTALLER_RESET_ENVIRONMENT']=='1'
     host=(ROOT/'diagnostic_browser/browser_host.py').read_text()
-    assert "'PYINSTALLER_RESET_ENVIRONMENT': '1'" in host
+    assert "env['PYINSTALLER_RESET_ENVIRONMENT'] = '1'" in host

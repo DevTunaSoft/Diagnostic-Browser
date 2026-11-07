@@ -5,7 +5,7 @@ function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('vis
 async function get(url){const r=await fetch(url,{credentials:'same-origin',cache:'no-store'});if(r.status===401){location.reload();throw Error('login required')}if(!r.ok)throw Error('request failed');return r.json()}
 async function post(url,body={}){const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(body)});if(!r.ok)throw Error('operation failed: '+r.status);return r.json()}
 function el(tag,content,cls){const x=document.createElement(tag);if(cls)x.className=cls;x.textContent=content;return x}
-function showView(view){document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===view));document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));const nav=document.querySelector('.nav[data-view="'+view+'"]');$('viewTitle').textContent=nav?nav.textContent.trim():'Session Cockpit';if(view==='updates')chromiumRefresh()}
+function showView(view){document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===view));document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));const nav=document.querySelector('.nav[data-view="'+view+'"]');$('viewTitle').textContent=nav?nav.textContent.trim():'Session Cockpit';if(view==='updates')chromiumRefresh();if(view==='browser')loadTarget()}
 function stat(id,value){$(id).textContent=String(value)}
 function renderStatus(x){lastStatus=x;const count=x.recording.counts||{};
  stat('stat-events',x.events);stat('stat-incidents',x.incidents);stat('stat-targets',x.browser.monitored_pages||0);
@@ -77,9 +77,25 @@ function renderChrome(x,effective,watchdog){
  // browser viewport + address bar
  if($('vp-browser')){$('vp-browser').textContent=br.state||'—';$('vp-targets').textContent=String(br.monitored_pages||0);
   $('vp-coverage').textContent=br.collector_coverage||'NOT VERIFIED';$('vp-recorder').textContent=rec.state||'—';}
- if($('address-url')){const url=br.active_url||br.url||lastStatus.target||'';
-  $('address-url').textContent=url||'Secured diagnostic session · no page exposed';
-  $('tab-title').textContent=url?url.replace(/^https?:\/\//,'').split('/')[0]:'Diagnostic session';}
+ if(currentTarget&&$('tab-title'))$('tab-title').textContent=currentTarget.host||'Diagnostic session';
+}
+let currentTarget=null;
+async function loadTarget(){try{const r=await get('/api/target');currentTarget=r.target||null;
+ if(currentTarget){if($('target-input')&&!document.activeElement.isSameNode($('target-input')))$('target-input').value=currentTarget.url;
+  if($('tab-title'))$('tab-title').textContent=currentTarget.host;
+  if($('vp-title'))$('vp-title').textContent='Diagnosing '+currentTarget.host;
+  if($('vp-sub'))$('vp-sub').textContent='The diagnostic browser is scoped to this host. Browse it in the diagnostic window; sanitized evidence appears in the flight recorder and the live log below.';}
+ }catch(e){}}
+async function diagnoseTarget(ev){if(ev)ev.preventDefault();
+ const inp=$('target-input'),btn=$('target-go'),res=$('target-result');
+ let url=(inp.value||'').trim();if(!url)return;
+ if(!/^https?:\/\//i.test(url))url='https://'+url;
+ res.style.display='block';res.textContent='Launching the diagnostic browser for '+url+' … this can take a few seconds.';btn.disabled=true;inp.disabled=true;
+ try{const r=await post('/api/target',{url});currentTarget=r.target;
+  res.textContent='Now diagnosing '+r.target.host+'. Browse it in the diagnostic window; events will appear below and in the Flight Recorder.';
+  toast('Diagnostic target set: '+r.target.host);await loadTarget();await refresh();
+ }catch(e){res.textContent='Could not set target: '+(e.message||'rejected').replace('operation failed: ','');toast('Target not set')}
+ finally{btn.disabled=false;inp.disabled=false}
 }
 const LOG_MAP={network:['http_activity','http_error','network_failure'],console:['console','console_message'],cpdom:['cpdom'],websocket:['websocket'],socketio:['socketio','socket_io'],iframe:['iframe'],worker:['worker']};
 let logFilter='all';
@@ -135,6 +151,8 @@ async function chromiumUpdate(){const btn=$('chromium-update-btn'),res=$('chromi
 async function init(){try{csrf=(await get('/api/session')).csrf}catch{location.reload();return}
  document.querySelectorAll('.nav').forEach(x=>x.addEventListener('click',()=>showView(x.dataset.view)));
  document.querySelectorAll('[data-goto]').forEach(x=>x.addEventListener('click',()=>showView(x.dataset.goto)));
+ if($('target-form'))$('target-form').addEventListener('submit',diagnoseTarget);
+ loadTarget();
  $('mark').addEventListener('click',mark);$('mark2').addEventListener('click',mark);
  $('selftest').addEventListener('click',selfTest);
  $('run-ai').addEventListener('click',async()=>{const target=$('ai-result');target.textContent='Running offline inference…';try{const x=await post('/api/ai-summary');target.textContent='AI hypotheses (not verified findings):\n'+x.analysis}catch{target.textContent='Local inference unavailable or timed out; no cloud fallback.'}});
