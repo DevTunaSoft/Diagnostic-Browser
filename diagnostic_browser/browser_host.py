@@ -295,6 +295,11 @@ class BrowserHostServer:
         self.rejected = 0
 
     def start(self):
+        # Idempotent: the bridge outlives browser-host restarts (retarget), so a
+        # second start must not re-bind the named pipe / socket (Windows raises
+        # WinError 5 when the address is already owned).
+        if self.listener is not None:
+            return
         if self.family == 'AF_UNIX':
             # Restricted data directory keeps socket unavailable to other users.
             Path(self.address).unlink(missing_ok=True)
@@ -549,21 +554,29 @@ class BrowserHostManager:
         """
         host = validate_target_url(url, self.args.synthetic_lab)
         clean = url if url.endswith('/') or urlsplit(url).path else url
-        await self.stop(deliberate=True)
-        # Wait for the previous host process to fully exit rather than deleting
-        # files it may still hold open (Windows raises PermissionError on an
-        # in-use file). Once its PID is gone, _safe_host_status reads None and
-        # start() spawns a fresh child; the new child clears its own stop file.
+        # Stop only the browser-host child; the bridge server (named pipe /
+        # socket) stays up so the relaunched child reconnects to it. Do not
+        # delete host files the exiting child may still hold open (Windows
+        # PermissionError). Once the old PID is gone, _safe_host_status reads
+        # None and start() spawns a fresh child that clears its own stop file.
+        await self._stop_child()
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline and _safe_host_status(self.root) is not None:
             await asyncio.sleep(0.25)
         self.process = None
         self._save_target(clean, host)
-        # stop() closed the bridge server; rebuild it for the new host.
-        self.server = BrowserHostServer(self.root, self.recorder, self.store)
-        self.server.loop = asyncio.get_running_loop()
         await self.start(clean)
         return self.current_target()
+
+    async def _stop_child(self):
+        """Signal the browser-host child to exit and wait for it, leaving the
+        bridge server running for the next child."""
+        (self.root / 'browser-host.stop').touch(mode=0o600)
+        if self.process:
+            try:
+                await asyncio.to_thread(self.process.wait, 15)
+            except subprocess.TimeoutExpired:
+                pass
 
     async def stop(self, *, deliberate: bool = False):
         if deliberate:
